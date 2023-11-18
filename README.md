@@ -11,8 +11,11 @@
 - **Cross-platform:** Rasa is available for Windows, macOS and Linux.
 
 ## Screenshots
+**Dark mode:**
 ![Dark mode](Images/full-dark-mode.png)
+**Light mode:**
 ![Light mode](Images/full-light-mode.png)
+**Markdown rendering:**
 ![Markdown](Images/markdown.png)
 
 ## Installation
