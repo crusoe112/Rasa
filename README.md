@@ -1,4 +1,4 @@
-![Rasa](Images/logo.png)
+![Rasa](Images/Rasa-Logo-Simple.png)
 # Rasa
 
 ## Description
