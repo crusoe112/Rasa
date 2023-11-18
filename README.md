@@ -1,3 +1,4 @@
+![Rasa](Images/logo.png)
 # Rasa
 
 ## Description
@@ -21,6 +22,7 @@
 ## Installation
 
 ```bash
+git clone https://github.com/crusoe112/Rasa.git
 python -m pip install -r requirements.txt
 ```
 
