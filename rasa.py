@@ -37,6 +37,7 @@ class FileMenu:
         color = askcolor()[1]
         if color is not None:
             self.editor.text.config(bg=color)
+            self.editor.root.config(bg=color)
             self.editor.timer_widget.change_bg_color()
 
     def select_font_color(self):
@@ -78,16 +79,16 @@ class TimerMenu:
         self.timer_widget = timer_widget
         self.timer_menu = tk.Menu(parent)
         parent.add_cascade(label="Timer", menu=self.timer_menu)
-        self.timer_menu.add_command(label="Start Timer", command=timer_widget.start_timer, accelerator="Ctrl+T")
+        self.timer_menu.add_command(label="Start Timer", command=timer_widget.start_timer, accelerator="Ctrl+B")
         self.timer_menu.add_command(label="Stop Timer", command=timer_widget.stop_timer, accelerator="Ctrl+P")
         self.timer_menu.add_command(label="Set Timer", command=timer_widget.set_timer, accelerator="Ctrl+R")
         self.timer_visibility = tk.BooleanVar()
         self.timer_visibility.set(False)
-        self.timer_menu.add_checkbutton(label="Show Timer", variable=self.timer_visibility, command=self.timer_widget.toggle_visibility, accelerator="Ctrl+H")
-        parent.bind_all("<Control-t>", lambda event: timer_widget.start_timer())
+        self.timer_menu.add_checkbutton(label="Show Timer", variable=self.timer_visibility, command=self.timer_widget.toggle_visibility, accelerator="Ctrl+J")
+        parent.bind_all("<Control-b>", lambda event: timer_widget.start_timer())
         parent.bind_all("<Control-p>", lambda event: timer_widget.stop_timer())
         parent.bind_all("<Control-r>", lambda event: timer_widget.set_timer())
-        parent.bind_all("<Control-h>", lambda event: timer_widget.toggle_visibility())
+        parent.bind_all("<Control-j>", lambda event: timer_widget.toggle_visibility())
 
 class CircularProgressBar:
     def __init__(self, parent, editor):
@@ -262,9 +263,19 @@ class RasaEditor:
         self.dark_mode_on = False
 
         self.root = root
-        self.text = tk.Text(root, font=("Dejavu Sans Mono", 12, 'bold'), insertbackground='#0f0a20', undo=True)
+        self.text = tk.Text(root, font=("Dejavu Sans Mono", 12, 'bold'), insertbackground='#0f0a20', undo=True, borderwidth=0)
         self.text.config(bg='#fdfdfd', fg='#0f0a20')
-        self.text.pack(fill="both", expand=True)
+
+        # Set the background color of the root window to be the same as the textbox
+        self.root.config(bg=self.text.cget('bg'))
+
+        # Create a grid layout
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_columnconfigure(2, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+
+        # Place the text widget in the center column of the grid with padding
+        self.text.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)  # Add padding around the top, bottom, and sides
 
         root.bind('<Motion>', self.show_menu)
 
@@ -316,10 +327,12 @@ class RasaEditor:
     def dark_mode(self):
         if self.dark_mode_on:
             self.text.config(bg='#fdfdfd', fg='#0f0a20', insertbackground='#0f0a20')
+            self.root.config(bg='#fdfdfd')
             self.timer_widget.toggle_dark_mode()
             self.dark_mode_on = False
         else:
             self.text.config(bg='#0f0a20', fg='#fdfdfd', insertbackground='#fdfdfd')
+            self.root.config(bg='#0f0a20')
             self.timer_widget.toggle_dark_mode()
             self.dark_mode_on = True
 
@@ -339,15 +352,23 @@ class RasaEditor:
 
     def toggle_render_markdown(self):
         if self.rendered:
-            self.text.pack(fill="both", expand=True)
-            self.html_view.pack_forget()
+            # Configure all rows and columns to expand
+            for i in range(3):
+                self.root.grid_rowconfigure(i, weight=1)
+                self.root.grid_columnconfigure(i, weight=1)
+            self.text.grid(row=0, rowspan=3, column=1, sticky="nsew", padx=10, pady=10)  # Add padding around the top, bottom, and sides
+            self.html_view.grid_forget()
             self.rendered = False
         else:
             content = self.text.get('1.0', 'end')
             html = markdown.markdown(content)
             self.html_view = HTMLScrolledText(self.root, html=html)
-            self.html_view.pack(fill="both", expand=True)
-            self.text.pack_forget()
+            # Configure all rows and columns to expand
+            for i in range(3):
+                self.root.grid_rowconfigure(i, weight=1)
+                self.root.grid_columnconfigure(i, weight=1)
+            self.html_view.grid(row=0, column=0, rowspan=3, columnspan=3, sticky="nsew")  # Adjust rowspan and columnspan
+            self.text.grid_forget()
             self.rendered = True
 
 root = tk.Tk()
