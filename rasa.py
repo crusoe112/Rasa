@@ -1,95 +1,170 @@
 import tkinter as tk
 from tkinter.colorchooser import askcolor
 from tkinter import filedialog, simpledialog, ttk
-from tkhtmlview import HTMLScrolledText
-import markdown
 import os
+import markdown
+from tkhtmlview import HTMLScrolledText
 
-class FileMenu:
-    def __init__(self, parent, editor):
+# Define the Plugin interface
+class Plugin:
+    def __init__(self, editor):
         self.editor = editor
-        self.file_menu = tk.Menu(parent)
-        parent.add_cascade(label="File", menu=self.file_menu)
-        self.file_menu.add_command(label="New File", command=editor.new_file, accelerator="Ctrl+N")
-        self.file_menu.add_command(label="Open", command=editor.open_file, accelerator="Ctrl+O")
-        self.file_menu.add_command(label="Save", command=editor.save_file, accelerator="Ctrl+S")
-        self.file_menu.add_command(label="Quit", command=root.quit, accelerator="Ctrl+Q")
-        parent.bind_all("<Control-n>", lambda event: editor.new_file())
-        parent.bind_all("<Control-o>", lambda event: editor.open_file())
-        parent.bind_all("<Control-s>", lambda event: editor.save_file())
-        parent.bind_all("<Control-q>", lambda event: root.quit())
 
-        # Add a preferences command
-        self.file_menu.add_command(label="Preferences", command=self.open_preferences_window)
+    def setup_menu(self, parent_menu):
+        raise NotImplementedError("Subclasses must implement setup_menu method")
 
-    def open_preferences_window(self):
-        # Create a new window
-        self.preferences_window = tk.Toplevel(self.editor.root)
-        self.preferences_window.title("Preferences")
+    def setup_preferences(self, tab_frame):
+        # Each plugin should implement this method to set up its preferences tab
+        pass
 
-        # Add options to select background and font colors
-        tk.Button(self.preferences_window, text="Select Background Color", command=self.select_bg_color).pack()
-        tk.Button(self.preferences_window, text="Select Font Color", command=self.select_font_color).pack()
-        tk.Button(self.preferences_window, text="Select Timer Color", command=self.select_timer_color).pack()
+    def get_name(self):
+        # Each plugin should implement this method to return its name
+        pass
 
-    def select_bg_color(self):
-        # Use a color dialog to select a color
-        color = askcolor()[1]
-        if color is not None:
-            self.editor.text.config(bg=color)
-            self.editor.root.config(bg=color)
-            self.editor.timer_widget.change_bg_color()
+class PreferencesPlugin(Plugin):
+    def setup_menu(self, parent_menu):
+        self.preferences_menu = tk.Menu(parent_menu)
+        parent_menu.add_cascade(label=self.get_name(), menu=self.preferences_menu)
+        for plugin in self.editor.plugins:
+            if not isinstance(plugin, PreferencesPlugin):
+                plugin.setup_preferences(self.preferences_menu)
 
-    def select_font_color(self):
-        # Use a color dialog to select a color
-        color = askcolor()[1]
-        if color is not None:
-            self.editor.text.config(fg=color)
-            self.editor.timer_widget.change_text_color()
+    def setup_preferences(self, preferences_menu):
+        # Exclude the PreferencesPlugin itself when setting up preferences
+        for plugin in self.editor.plugins:
+            if not isinstance(plugin, PreferencesPlugin) and plugin != self:
+                plugin.setup_preferences(preferences_menu)
 
-    def select_timer_color(self):
-        # Use a color dialog to select a color
-        color = askcolor()[1]
-        if color is not None:
-            self.editor.timer_widget.change_timer_color(color)
+    def get_name(self):
+        return "Preferences"
 
-class EditMenu:
-    def __init__(self, parent, editor):
-        self.edit_menu = tk.Menu(parent)
-        parent.add_cascade(label="Edit", menu=self.edit_menu)
-        self.edit_menu.add_command(label="Undo", command=editor.text.edit_undo, accelerator="Ctrl+Z")
-        self.edit_menu.add_command(label="Redo", command=editor.text.edit_redo, accelerator="Ctrl+Y")
-        parent.bind_all("<Control-z>", lambda event: editor.text.edit_undo())
-        parent.bind_all("<Control-y>", lambda event: editor.text.edit_redo())
-
-class ViewMenu:
-    def __init__(self, parent, editor):
+# Define TimerPlugin
+class TimerPlugin:
+    def __init__(self, editor):
         self.editor = editor
-        self.view_menu = tk.Menu(parent)
-        parent.add_cascade(label="View", menu=self.view_menu)
-        self.view_menu.add_command(label="Distraction Free Mode", command=editor.distraction_free, accelerator="Ctrl+D")
-        self.view_menu.add_command(label="Dark Mode", command=editor.dark_mode, accelerator="Ctrl+K")
-        self.view_menu.add_command(label="Toggle Rendered Markdown", command=editor.toggle_render_markdown, accelerator="Ctrl+M")
-        parent.bind_all("<Control-d>", lambda event: editor.distraction_free())
-        parent.bind_all("<Control-k>", lambda event: editor.dark_mode())
-        parent.bind_all("<Control-m>", lambda event: editor.toggle_render_markdown())
+        self.timer_widget = TimerWidget(editor.root, editor)
 
-class TimerMenu:
-    def __init__(self, parent, timer_widget):
-        self.timer_widget = timer_widget
-        self.timer_menu = tk.Menu(parent)
-        parent.add_cascade(label="Timer", menu=self.timer_menu)
-        self.timer_menu.add_command(label="Start Timer", command=timer_widget.start_timer, accelerator="Ctrl+B")
-        self.timer_menu.add_command(label="Stop Timer", command=timer_widget.stop_timer, accelerator="Ctrl+P")
-        self.timer_menu.add_command(label="Set Timer", command=timer_widget.set_timer, accelerator="Ctrl+R")
+    def setup_menu(self, parent_menu):
+        self.timer_menu = tk.Menu(parent_menu)
+        parent_menu.add_cascade(label="Timer", menu=self.timer_menu)
+        self.timer_menu.add_command(label="Start Timer", command=self.timer_widget.start_timer, accelerator="Ctrl+B")
+        self.timer_menu.add_command(label="Stop Timer", command=self.timer_widget.stop_timer, accelerator="Ctrl+P")
+        self.timer_menu.add_command(label="Set Timer", command=self.timer_widget.set_timer, accelerator="Ctrl+R")
         self.timer_visibility = tk.BooleanVar()
         self.timer_visibility.set(False)
-        self.timer_menu.add_checkbutton(label="Show Timer", variable=self.timer_visibility, command=self.timer_widget.toggle_visibility, accelerator="Ctrl+J")
-        parent.bind_all("<Control-b>", lambda event: timer_widget.start_timer())
-        parent.bind_all("<Control-p>", lambda event: timer_widget.stop_timer())
-        parent.bind_all("<Control-r>", lambda event: timer_widget.set_timer())
-        parent.bind_all("<Control-j>", lambda event: timer_widget.toggle_visibility())
+        self.timer_menu.add_checkbutton(label="Show Timer", variable=self.timer_visibility,
+                                        command=self.timer_widget.toggle_visibility, accelerator="Ctrl+J")
+        parent_menu.bind_all("<Control-b>", lambda event: self.timer_widget.start_timer())
+        parent_menu.bind_all("<Control-p>", lambda event: self.timer_widget.stop_timer())
+        parent_menu.bind_all("<Control-r>", lambda event: self.timer_widget.set_timer())
+        parent_menu.bind_all("<Control-j>", lambda event: self.timer_widget.toggle_visibility())
 
+    def get_name(self):
+        return "Timer"
+
+    def setup_preferences(self, preferences_menu):
+        # Add TimerPlugin preferences to the preferences menu
+        preferences_menu.add_command(label="Select Timer Color", command=self.timer_widget.select_timer_color)    
+
+    def toggle_dark_mode(self):
+        self.timer_widget.toggle_dark_mode()
+
+# Define MarkdownPlugin
+class MarkdownRendererPlugin:
+    def __init__(self, editor):
+        self.editor = editor
+        self.rendered = False
+        self.html_view = None
+
+    def setup_menu(self, parent_menu):
+        parent_menu.add_command(label="Toggle Rendered Markdown", command=self.toggle_render_markdown, accelerator="Ctrl+M")
+        parent_menu.bind_all("<Control-m>", lambda event: self.toggle_render_markdown())
+
+    def get_name(self):
+        return "Toggle Rendered Markdown"
+
+    def setup_preferences(self, tab_frame):
+        # Add preferences for the MarkdownRendererPlugin
+        pass    
+
+    def toggle_render_markdown(self):
+        if self.rendered:
+            # Configure all rows and columns to expand
+            for i in range(3):
+                self.editor.root.grid_rowconfigure(i, weight=1)
+                self.editor.root.grid_columnconfigure(i, weight=1)
+            self.editor.text.grid(row=0, rowspan=3, column=1, sticky="nsew", padx=10, pady=10)  # Add padding around the top, bottom, and sides
+            if self.html_view:
+                self.html_view.grid_forget()
+            self.rendered = False
+        else:
+            content = self.editor.text.get('1.0', 'end')
+            html = markdown.markdown(content)
+            self.html_view = HTMLScrolledText(self.editor.root, html=html)
+            # Configure all rows and columns to expand
+            for i in range(3):
+                self.editor.root.grid_rowconfigure(i, weight=1)
+                self.editor.root.grid_columnconfigure(i, weight=1)
+            self.html_view.grid(row=0, column=0, rowspan=3, columnspan=3, sticky="nsew")  # Adjust rowspan and columnspan
+            self.editor.text.grid_forget()
+            self.rendered = True
+
+# Define FilePlugin
+class FilePlugin(Plugin):
+    def setup_menu(self, parent_menu):
+        self.file_menu = tk.Menu(parent_menu)
+        parent_menu.add_cascade(label="File", menu=self.file_menu)
+        self.file_menu.add_command(label="New File", command=self.editor.new_file, accelerator="Ctrl+N")
+        self.file_menu.add_command(label="Open", command=self.editor.open_file, accelerator="Ctrl+O")
+        self.file_menu.add_command(label="Save", command=self.editor.save_file, accelerator="Ctrl+S")
+        self.file_menu.add_command(label="Quit", command=self.editor.root.quit, accelerator="Ctrl+Q")
+        parent_menu.bind_all("<Control-n>", lambda event: self.editor.new_file())
+        parent_menu.bind_all("<Control-o>", lambda event: self.editor.open_file())
+        parent_menu.bind_all("<Control-s>", lambda event: self.editor.save_file())
+        parent_menu.bind_all("<Control-q>", lambda event: self.editor.root.quit())
+
+    def get_name(self):
+        return "File"
+
+    def setup_preferences(self, tab_frame):
+        # Add preferences for the FilePlugin
+        pass        
+
+# Define EditPlugin
+class EditPlugin(Plugin):
+    def setup_menu(self, parent_menu):
+        self.edit_menu = tk.Menu(parent_menu)
+        parent_menu.add_cascade(label="Edit", menu=self.edit_menu)
+        self.edit_menu.add_command(label="Undo", command=self.editor.text.edit_undo, accelerator="Ctrl+Z")
+        self.edit_menu.add_command(label="Redo", command=self.editor.text.edit_redo, accelerator="Ctrl+Y")
+        parent_menu.bind_all("<Control-z>", lambda event: self.editor.text.edit_undo())
+        parent_menu.bind_all("<Control-y>", lambda event: self.editor.text.edit_redo())
+
+    def get_name(self):
+        return "Edit"
+
+    def setup_preferences(self, tab_frame):
+        # Add preferences for the EditPlugin
+        pass        
+
+# Define ViewPlugin
+class ViewPlugin(Plugin):
+    def setup_menu(self, parent_menu):
+        self.view_menu = tk.Menu(parent_menu)
+        parent_menu.add_cascade(label="View", menu=self.view_menu)
+        self.view_menu.add_command(label="Distraction Free Mode", command=self.editor.distraction_free, accelerator="Ctrl+D")
+        self.view_menu.add_command(label="Dark Mode", command=self.editor.dark_mode, accelerator="Ctrl+K")
+        parent_menu.bind_all("<Control-d>", lambda event: self.editor.distraction_free())
+        parent_menu.bind_all("<Control-k>", lambda event: self.editor.dark_mode())
+
+    def get_name(self):
+        return "View"
+
+    def setup_preferences(self, tab_frame):
+        # Add preferences for the ViewPlugin
+        pass        
+
+# Define CircularProgressBar
 class CircularProgressBar:
     def __init__(self, parent, editor):
         self.editor = editor
@@ -138,11 +213,11 @@ class CircularProgressBar:
         self.icon = ''
         self.render()
 
-    def start_timer(self, total_seconds, timer_seconds):
+    def start_timer(self, total_seconds=None, timer_seconds=None):
         if self.running:
             return
-        self.timer_seconds = timer_seconds
-        self.total_seconds = total_seconds
+        self.timer_seconds = timer_seconds if timer_seconds is not None else self.timer_seconds
+        self.total_seconds = total_seconds if total_seconds is not None else self.total_seconds
         self.running = True
         self.update_timer()
 
@@ -165,19 +240,22 @@ class CircularProgressBar:
             # Draw the arc (foreground)
             self.canvas.create_arc(10, 10, 70, 70, start=90, extent=angle, width=2, outline=self.color, style='arc')
             if self.icon == '':
-                time_text = f"{self.timer_seconds//60}:{self.timer_seconds%60:02}"
+                time_text = f"{self.timer_seconds // 60}:{self.timer_seconds % 60:02}"
                 font_size = 12 if len(time_text) <= 4 else 10  # Adjust the font size based on the length of the time_text
-                self.canvas.create_text(40, 40, text=time_text, fill=self.text_color, font=("Dejavu Sans Mono", font_size, 'bold'))
+                self.canvas.create_text(40, 40, text=time_text, fill=self.text_color,
+                                        font=("Dejavu Sans Mono", font_size, 'bold'))
             else:
-                self.canvas.create_text(40, 40, text=self.icon, fill=self.text_color, font=("Dejavu Sans Mono", 24, 'bold'))
+                self.canvas.create_text(40, 40, text=self.icon, fill=self.text_color,
+                                        font=("Dejavu Sans Mono", 24, 'bold'))
         else:
             self.running = False
             self.canvas.delete('all')  # Clear the canvas
             if self.icon == '':
-                self.canvas.create_text(40, 40, text="Time's up!", fill=self.text_color, font=("Dejavu Sans Mono", 10, 'bold'))
+                self.canvas.create_text(40, 40, text="Time's up!", fill=self.text_color,
+                                        font=("Dejavu Sans Mono", 10, 'bold'))
             else:
-                self.canvas.create_text(40, 40, text=self.icon, fill=self.text_color, font=("Dejavu Sans Mono", 24, 'bold'))
-
+                self.canvas.create_text(40, 40, text=self.icon, fill=self.text_color,
+                                        font=("Dejavu Sans Mono", 24, 'bold'))
 
     def update_timer(self):
         self.render()
@@ -205,7 +283,7 @@ class CircularProgressBar:
         self.color = color
         self.render()
 
-    def toggle_visibility(self):  # Add this method
+    def toggle_visibility(self):
         if self.visible:
             self.canvas.place_forget()
             self.visible = False
@@ -216,6 +294,7 @@ class CircularProgressBar:
             self.total_seconds = self.timer_seconds
             self.render()
 
+# Define TimerWidget
 class TimerWidget:
     def __init__(self, parent, editor):
         self.editor = editor
@@ -231,7 +310,8 @@ class TimerWidget:
             self.visible = True
 
     def start_timer(self):
-        self.circular_progress_bar.start_timer(self.circular_progress_bar.total_seconds, self.circular_progress_bar.timer_seconds)  # Add this line
+        self.circular_progress_bar.start_timer(self.circular_progress_bar.total_seconds,
+                                              self.circular_progress_bar.timer_seconds)  # Add this line
 
     def stop_timer(self):
         self.circular_progress_bar.stop_timer()  # Stop the timer in the CircularProgressBar
@@ -255,11 +335,18 @@ class TimerWidget:
 
     def change_timer_color(self, color):
         self.circular_progress_bar.change_timer_color(color)
-    
+
+    def select_timer_color(self):
+        # Use a color dialog to select a color
+        color = askcolor()[1]
+        if color is not None:
+            self.change_timer_color(color)
+
 class RasaEditor:
     def __init__(self, root):
         self.rendered = False
         self.distraction_free_on = False
+        self.menu_hidden = False
         self.dark_mode_on = False
 
         self.root = root
@@ -282,11 +369,20 @@ class RasaEditor:
         self.menu = tk.Menu(root)  # Create a Menu widget
         root.config(menu=self.menu)  # Configure the root window to use this menu
 
-        self.file_menu = FileMenu(self.menu, self)  # Pass the Menu widget to the FileMenu
-        self.edit_menu = EditMenu(self.menu, self)  # Pass the Menu widget to the EditMenu
-        self.view_menu = ViewMenu(self.menu, self)  # Pass the Menu widget to the ViewMenu
-        self.timer_widget = TimerWidget(root, self)
-        self.timer_menu = TimerMenu(self.menu, self.timer_widget)  # Pass the Menu widget to the TimerMenu
+        self.preferences_plugin = PreferencesPlugin(self)
+
+        self.plugins = [
+            FilePlugin(self),
+            EditPlugin(self),
+            self.preferences_plugin,
+            ViewPlugin(self),
+            TimerPlugin(self),
+            MarkdownRendererPlugin(self),
+        ]
+
+        # Setup menus for each plugin
+        for plugin in self.plugins:
+            plugin.setup_menu(self.menu)
 
     def new_file(self):
         self.text.delete('1.0', tk.END)
@@ -309,73 +405,56 @@ class RasaEditor:
     def distraction_free(self):
         if self.distraction_free_on:
             self.root.attributes('-fullscreen', False)
-            if self.menu.index('end') == 0:
-                self.menu.add_cascade(label="File", menu=self.file_menu)
-                self.menu.add_cascade(label="Edit", menu=self.edit_menu)
-                self.menu.add_cascade(label="View", menu=self.view_menu)
-                self.menu.add_cascade(label="Timer", menu=self.timer_menu)
+            self.show_menu_bar()
             self.distraction_free_on = False
         else:
             self.root.attributes('-fullscreen', True)
-            if self.menu.index('end') == 4:
-                self.menu.delete("File")
-                self.menu.delete("Edit")
-                self.menu.delete("View")
-                self.menu.delete("Timer")
-            self.distraction_free_on = True
+            self.hide_menu()
+            self.distraction_free_on = True    
 
     def dark_mode(self):
         if self.dark_mode_on:
             self.text.config(bg='#fdfdfd', fg='#0f0a20', insertbackground='#0f0a20')
             self.root.config(bg='#fdfdfd')
-            self.timer_widget.toggle_dark_mode()
+            for plugin in self.plugins:
+                if hasattr(plugin, 'toggle_dark_mode'):
+                    plugin.toggle_dark_mode()
             self.dark_mode_on = False
         else:
             self.text.config(bg='#0f0a20', fg='#fdfdfd', insertbackground='#fdfdfd')
             self.root.config(bg='#0f0a20')
-            self.timer_widget.toggle_dark_mode()
+            for plugin in self.plugins:
+                if hasattr(plugin, 'toggle_dark_mode'):
+                    plugin.toggle_dark_mode()
             self.dark_mode_on = True
 
     def show_menu(self, event):
-        if self.distraction_free_on and event.y < 1:
-            if self.menu.index('end') == 0:
-                self.menu.add_cascade(label="File", menu=self.file_menu.file_menu)
-                self.menu.add_cascade(label="Edit", menu=self.edit_menu.edit_menu)
-                self.menu.add_cascade(label="View", menu=self.view_menu.view_menu)
-                self.menu.add_cascade(label="Timer", menu=self.timer_menu.timer_menu)
-        elif self.distraction_free_on:
-            if self.menu.index('end') == 4:
-                self.menu.delete("File")
-                self.menu.delete("Edit")
-                self.menu.delete("View")
-                self.menu.delete("Timer")
+            if self.distraction_free_on and event.y > 1:
+                if not self.menu_hidden:
+                    self.hide_menu()
+            elif self.distraction_free_on:
+                if self.menu_hidden:
+                    self.show_menu_bar()
 
-    def toggle_render_markdown(self):
-        if self.rendered:
-            # Configure all rows and columns to expand
-            for i in range(3):
-                self.root.grid_rowconfigure(i, weight=1)
-                self.root.grid_columnconfigure(i, weight=1)
-            self.text.grid(row=0, rowspan=3, column=1, sticky="nsew", padx=10, pady=10)  # Add padding around the top, bottom, and sides
-            self.html_view.grid_forget()
-            self.rendered = False
-        else:
-            content = self.text.get('1.0', 'end')
-            html = markdown.markdown(content)
-            self.html_view = HTMLScrolledText(self.root, html=html)
-            # Configure all rows and columns to expand
-            for i in range(3):
-                self.root.grid_rowconfigure(i, weight=1)
-                self.root.grid_columnconfigure(i, weight=1)
-            self.html_view.grid(row=0, column=0, rowspan=3, columnspan=3, sticky="nsew")  # Adjust rowspan and columnspan
-            self.text.grid_forget()
-            self.rendered = True
+    def hide_menu(self):
+        if self.menu.index('end') != 0:
+            self.menu_hidden = True
+            for plugin in self.plugins:
+                if hasattr(plugin, 'setup_menu'):
+                    self.menu.delete(plugin.get_name())
+
+    def show_menu_bar(self):
+        if self.menu.index('end') == 0:
+            self.menu_hidden = False
+            for plugin in self.plugins:
+                if hasattr(plugin, 'setup_menu'):  # Check if the plugin has a setup_menu method
+                    plugin.setup_menu(self.menu)
 
 root = tk.Tk()
 if "nt" == os.name:
-    root.wm_iconbitmap(bitmap = "Rasa-Logo.ico")
+    root.wm_iconbitmap(bitmap="Rasa-Logo.ico")
 else:
-    root.wm_iconbitmap(bitmap = "@Rasa-Logo.xbm")
+    root.wm_iconbitmap(bitmap="@Rasa-Logo.xbm")
 root.title("Rasa")
 app = RasaEditor(root)
 root.mainloop()
