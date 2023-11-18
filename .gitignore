@@ -1,0 +1,9 @@
+*.png
+*.jpg
+
+# Python Cache and Build Directories
+__pycache__/
+build/
+dist/
+*.pyc
+*.pyo
