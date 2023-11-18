@@ -3,6 +3,7 @@ from tkinter.colorchooser import askcolor
 from tkinter import filedialog, simpledialog, ttk
 from tkhtmlview import HTMLScrolledText
 import markdown
+import os
 
 class FileMenu:
     def __init__(self, parent, editor):
@@ -350,7 +351,10 @@ class RasaEditor:
             self.rendered = True
 
 root = tk.Tk()
-root.iconbitmap("Rasa-Logo.ico")
+if "nt" == os.name:
+    root.wm_iconbitmap(bitmap = "Rasa-Logo.ico")
+else:
+    root.wm_iconbitmap(bitmap = "@Rasa-Logo.xbm")
 root.title("Rasa")
 app = RasaEditor(root)
 root.mainloop()
